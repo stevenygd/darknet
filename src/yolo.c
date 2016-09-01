@@ -15,8 +15,13 @@ image voc_labels[20];
 
 void train_yolo(char *cfgfile, char *weightfile)
 {
-    char *train_images = "/data/voc/train.txt";
-    char *backup_directory = "/home/pjreddie/backup/";
+    // char *train_images = "/data/voc/train.txt";
+    // char *backup_directory = "/home/pjreddie/backup/";
+
+    // Use default training file.
+    char *train_images     = "/workspace/darknet/train.txt";
+    char *backup_directory = "/workspace/darknet/backup";
+
     srand(time(0));
     data_seed = time(0);
     char *base = basecfg(cfgfile);
@@ -145,7 +150,8 @@ void validate_yolo(char *cfgfile, char *weightfile)
 
     char *base = "results/comp4_det_test_";
     //list *plist = get_paths("data/voc.2007.test");
-    list *plist = get_paths("/home/pjreddie/data/voc/2007_test.txt");
+    // list *plist = get_paths("/home/pjreddie/data/voc/2007_test.txt");
+    list *plist = get_paths("/mnt/2007_test.txt");
     //list *plist = get_paths("data/voc.2012.test");
     char **paths = (char **)list_to_array(plist);
 
@@ -234,7 +240,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile)
     srand(time(0));
 
     char *base = "results/comp4_det_test_";
-    list *plist = get_paths("data/voc.2007.test");
+    list *plist = get_paths("/mnt/2007_test_sm.txt");
     char **paths = (char **)list_to_array(plist);
 
     layer l = net.layers[net.n-1];
@@ -303,10 +309,13 @@ void validate_yolo_recall(char *cfgfile, char *weightfile)
         }
 
         fprintf(stderr, "%5d %5d %5d\tRPs/Img: %.2f\tIOU: %.2f%%\tRecall:%.2f%%\n", i, correct, total, (float)proposals/(i+1), avg_iou*100/total, 100.*correct/total);
+
         free(id);
         free_image(orig);
         free_image(sized);
     }
+	
+    fprintf(stderr, "%5d %5d\tRPs/Img: %.2f\tIOU: %.2f%%\tRecall:%.2f%%\n", total, correct, (float)proposals/(m+1), avg_iou*100/total, 100.*correct/total);
 }
 
 void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
