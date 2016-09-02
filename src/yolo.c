@@ -297,7 +297,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         //draw_detections(im, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20);
         draw_detections(orig, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, CLASSNUM);
 	char* outpath = find_replace(path, "images", "predicts");
-	printf("Svae to %s", outpath);
+	printf("Svae to %s\n", outpath);
         save_image(orig, outpath);
 
         char *labelpath = find_replace(path, "images", "labels");
