@@ -22,6 +22,7 @@ void train_yolo(char *cfgfile, char *weightfile)
 
     // Use default training file.
     char *train_images     = "/data/full_10_class_yolo/train.txt";
+    // char *train_images     = "/data/train.txt";
     char *backup_directory = "/workspace/darknet/backup";
 
     srand(time(0));
