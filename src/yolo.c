@@ -28,8 +28,8 @@ void train_yolo(char *cfgfile, char *weightfile)
     srand(time(0));
     data_seed = time(0);
     char *base = basecfg(cfgfile);
-    printf("%s\n", base);
     float avg_loss = -1;
+    float long_avg_loss = -1;
     network net = parse_network_cfg(cfgfile);
     if(weightfile){
         load_weights(&net, weightfile);
@@ -38,7 +38,6 @@ void train_yolo(char *cfgfile, char *weightfile)
     int imgs = net.batch*net.subdivisions;
     int i = *net.seen/imgs;
     data train, buffer;
-
 
     layer l = net.layers[net.n - 1];
 
@@ -72,17 +71,20 @@ void train_yolo(char *cfgfile, char *weightfile)
         train = buffer;
         load_thread = load_data_in_thread(args);
 
-        printf("Loaded: %lf seconds\n", sec(clock()-time));
+        fprintf(stderr, "Loaded: %lf seconds\n", sec(clock()-time));
 
         time=clock();
         float loss = train_network(net, train);
         if (avg_loss < 0) avg_loss = loss;
+        if (long_avg_loss < 0) long_avg_loss = loss;
         avg_loss = avg_loss*.9 + loss*.1;
+        long_avg_loss = long_avg_loss*.99 + loss*.01;
 
-        printf("%d: %f, %f avg, %f rate, %lf seconds, %d images\n", i, loss, avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
+        printf("%d: %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
+        fprintf(stderr, "%d: %f, %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, loss, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
         if(i%1000==0 || (i < 1000 && i%100 == 0)){
             char buff[256];
-            sprintf(buff, "%s/%s_%d.weights", backup_directory, base, i);
+            sprintf(buff, "%s/%s_%d_%f.weights", backup_directory, base, i, get_current_rate(net));
             save_weights(net, buff);
         }
         free_data(train);
@@ -252,7 +254,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
     srand(time(0));
 
     char *base = "results/comp4_det_test_";
-    list *plist = get_paths("/data/full_10_class_yolo/val_sm.txt");
+    list *plist = get_paths("/data/full_10_class_yolo/val1.txt");
     char **paths = (char **)list_to_array(plist);
 
     layer l = net.layers[net.n-1];
@@ -286,6 +288,8 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
 
     for(i = 0; i < m; ++i){
         char *path = paths[i];
+
+	printf("Load from %s\n", path);
         image orig = load_image_color(path, 0, 0);
         image sized = resize_image(orig, net.w, net.h);
         char *id = basecfg(path);
