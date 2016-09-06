@@ -82,7 +82,7 @@ void train_yolo(char *cfgfile, char *weightfile)
 
         printf("%d: %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
         fprintf(stderr, "%d: %f, %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, loss, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
-        if(i%1000==0 || (i < 1000 && i%100 == 0)){
+        if(i%1080==0 || (i < 1080 && i%108 == 0)){
             char buff[256];
             sprintf(buff, "%s/%s_%d_%f.weights", backup_directory, base, i, get_current_rate(net));
             save_weights(net, buff);
@@ -156,7 +156,7 @@ void validate_yolo(char *cfgfile, char *weightfile)
     char *base = "results/comp4_det_test_";
     //list *plist = get_paths("data/voc.2007.test");
     // list *plist = get_paths("/home/pjreddie/data/voc/2007_test.txt");
-    list *plist = get_paths("/data/full_10_class/val.txt");
+    list *plist = get_paths("/data/full_10_class_yolo/val1.txt");
     //list *plist = get_paths("data/voc.2012.test");
     char **paths = (char **)list_to_array(plist);
 
@@ -255,6 +255,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
 
     char *base = "results/comp4_det_test_";
     list *plist = get_paths("/data/full_10_class_yolo/val1.txt");
+    // list *plist = get_paths("/data/full_10_class_yolo/train.txt");
     char **paths = (char **)list_to_array(plist);
 
     layer l = net.layers[net.n-1];
