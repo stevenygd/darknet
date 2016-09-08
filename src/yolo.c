@@ -243,7 +243,7 @@ char* concat(char *s1, char *s2)
     return result;
 }
 
-void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh)
+void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh, int only_obj)
 {
     network net = parse_network_cfg(cfgfile);
     if(weightfile){
@@ -295,15 +295,17 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         image sized = resize_image(orig, net.w, net.h);
         char *id = basecfg(path);
         float *predictions = network_predict(net, sized.data);
-        convert_detections(predictions, classes, l.n, square, side, 1, 1, thresh, probs, boxes, 1);
+        // convert_detections(predictions, classes, l.n, square, side, 1, 1, thresh, probs, boxes, 1);
+        // last param is : only_objectness, detect or not, doesn't distinguish between classes
+        convert_detections(predictions, classes, l.n, square, side, 1, 1, thresh, probs, boxes, only_obj);
         if (nms) do_nms(boxes, probs, side*side*l.n, 1, nms);
 
         // image im = load_image_color(input,0,0);
         // if (nms) do_nms_sort(boxes, probs, l.side*l.side*l.n, l.classes, nms);
         //draw_detections(im, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20);
         draw_detections(orig, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, CLASSNUM);
-	char* outpath = find_replace(path, "images", "predicts");
-	printf("Svae to %s\n", outpath);
+        char* outpath = find_replace(path, "images", "predicts");
+        printf("Svae to %s\n", outpath);
         save_image(orig, outpath);
 
         char *labelpath = find_replace(path, "images", "labels");
@@ -316,7 +318,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         for(k = 0; k < side*side*l.n; ++k){
             if(probs[k][0] > thresh){
                 ++proposals;
-		avg_prob += probs[k][0];
+                avg_prob += probs[k][0];
             }
         }
         for (j = 0; j < num_labels; ++j) {
@@ -406,8 +408,9 @@ void run_yolo(int argc, char **argv)
         voc_labels[i] = load_image_color(buff, 0, 0);
     }
 
-    float thresh = find_float_arg(argc, argv, "-thresh", .2);
-    float iou_thresh = find_int_arg(argc, argv, "-iou_thresh", 0.5);
+    float thresh = find_float_arg(argc, argv, "-thresh", .001);
+    float iou_thresh = find_float_arg(argc, argv, "-iou_thresh", 0.5);
+    int only_obj = find_int_arg(argc, argv, "-only_obj", 0);
     int cam_index = find_int_arg(argc, argv, "-c", 0);
     int frame_skip = find_int_arg(argc, argv, "-s", 0);
     if(argc < 4){
@@ -421,6 +424,6 @@ void run_yolo(int argc, char **argv)
     if(0==strcmp(argv[2], "test")) test_yolo(cfg, weights, filename, thresh);
     else if(0==strcmp(argv[2], "train")) train_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "valid")) validate_yolo(cfg, weights);
-    else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh);
+    else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh, only_obj);
     else if(0==strcmp(argv[2], "demo")) demo(cfg, weights, thresh, cam_index, filename, voc_names, voc_labels, CLASSNUM, frame_skip);
 }

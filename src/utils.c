@@ -507,14 +507,27 @@ int sample_array(float *a, int n)
 
 int max_index(float *a, int n)
 {
+    int verbose = 0;
     if(n <= 0) return -1;
     int i, max_i = 0;
     float max = a[0];
+    if (verbose) {
+	printf("(%d : %f), ", 0, a[0]);
+    }
     for(i = 1; i < n; ++i){
+        if (verbose) { printf("(%d : %f)", i, a[i]); }
         if(a[i] > max){
             max = a[i];
             max_i = i;
         }
+
+	if (verbose) {
+	    if (i != n -1) {
+	        printf(", ");
+	    } else {
+	        printf("\n");
+	    }
+	}
     }
     return max_i;
 }

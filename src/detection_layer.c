@@ -65,10 +65,13 @@ void forward_detection_layer(const detection_layer l, network_state state)
         *(l.cost) = 0;
         int size = l.inputs * l.batch;
         memset(l.delta, 0, size * sizeof(float));
-        for (b = 0; b < l.batch; ++b){
-            int index = b*l.inputs;
-            for (i = 0; i < locations; ++i) {
+        for (b = 0; b < l.batch; ++b){	// [b] 		the idx of img w/in batch
+            int index = b*l.inputs;	    // [index]	the pointer to the predictions data	
+            for (i = 0; i < locations; ++i) { // [i] 	the idx for grid
+		        // [truth_index] pointer to the truth data for current img
                 int truth_index = (b*locations + i)*(1+l.coords+l.classes);
+
+		        // 1 if current grid contains instance, 0 otherwise
                 int is_obj = state.truth[truth_index];
                 for (j = 0; j < l.n; ++j) {
                     int p_index = index + locations*l.classes + i*l.n + j;
@@ -90,8 +93,8 @@ void forward_detection_layer(const detection_layer l, network_state state)
                     l.delta[class_index+j] = l.class_scale * (state.truth[truth_index+1+j] - l.output[class_index+j]);
                     *(l.cost) += l.class_scale * pow(state.truth[truth_index+1+j] - l.output[class_index+j], 2);
                     if(state.truth[truth_index + 1 + j])  {
-			avg_cat += l.output[class_index+j];
-		    }
+                        avg_cat += l.output[class_index+j];
+                    }
                     avg_allcat += l.output[class_index+j];
                 }
 
