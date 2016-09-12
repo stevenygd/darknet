@@ -122,6 +122,30 @@ void convert_detections(float *predictions, int classes, int num, int square, in
     }
 }
 
+char* concat(char *s1, char *s2)
+{
+    char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the zero-terminator
+    //in real code you would check for errors in malloc here
+    strcpy(result, s1);
+    strcat(result, s2);
+    return result;
+}
+
+char* get_data_path(int type, char* base) {
+    if (type == 0) {
+        // 0: training set
+        return concat(base, "train.txt");
+    } else if (type == 1) {
+        // 1: test set
+        return concat(base, "test.txt");
+    } else {
+        int val_num = type % 3;
+        char* fname = (char*) calloc(10, sizeof(char));
+        sprintf(fname, "val%d.txt", val_num);
+        return concat(base, fname);
+    }
+}
+
 void print_yolo_detections(FILE **fps, char *id, box *boxes, float **probs, int total, int classes, int w, int h)
 {
     int i, j;
@@ -234,16 +258,23 @@ void validate_yolo(char *cfgfile, char *weightfile)
     fprintf(stderr, "Total Detection Time: %f Seconds\n", (double)(time(0) - start));
 }
 
-char* concat(char *s1, char *s2)
-{
-    char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the zero-terminator
-    //in real code you would check for errors in malloc here
-    strcpy(result, s1);
-    strcat(result, s2);
-    return result;
+int* shuffled_idx(int total) {
+    int* all_idx = (int*) calloc(total, sizeof(int));
+    int i;
+    for (i = 0; i < total; ++i) {
+        all_idx[i] = i;
+    }
+
+    for (i = 0; i < total - 2; ++i) {
+        int j = rand() % ((total - 1) + 1 - i) + i;
+        int tmp = all_idx[j];
+        all_idx[j] = all_idx[i];
+        all_idx[i] = tmp;
+    }
+    return all_idx;
 }
 
-void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh, int only_obj)
+void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh, int only_obj, int type, float nms, int max)
 {
     network net = parse_network_cfg(cfgfile);
     if(weightfile){
@@ -254,8 +285,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
     srand(time(0));
 
     char *base = "results/comp4_det_test_";
-    list *plist = get_paths("/data/full_10_class_yolo/val1.txt");
-    // list *plist = get_paths("/data/full_10_class_yolo/train.txt");
+    list *plist = get_paths(get_data_path(type, "/data/full_10_class_yolo/"));
     char **paths = (char **)list_to_array(plist);
 
     layer l = net.layers[net.n-1];
@@ -271,15 +301,22 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         fps[j] = fopen(buff, "w");
     }
     box *boxes = calloc(side*side*l.n, sizeof(box));
+
+    // probs[loc][c] is the probablity of class [c] at location [loc]
     float **probs = calloc(side*side*l.n, sizeof(float *));
     for(j = 0; j < side*side*l.n; ++j) probs[j] = calloc(classes, sizeof(float *));
 
     int m = plist->size;
     int i=0;
 
+    // specify the probability threshold to be considered as an detection 
     // float thresh = .001;
+    
+    // Specify the iou_thresh hold to be considered correctly localized
     // float iou_thresh = .5;
-    float nms = 0;
+    
+    // Specify the threshhold to perform non-maximum supression
+    // float nms = 0.3;
 
     int total = 0;
     int correct = 0;
@@ -287,10 +324,14 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
     float avg_iou = 0;
     float avg_prob= 0;
 
-    for(i = 0; i < m; ++i){
-        char *path = paths[i];
+    // this is the non shuffled way
+    // for(i = 0; i < m; ++i){
+        // char *path = paths[i];
 
-	printf("Load from %s\n", path);
+    int* all_idx = shuffled_idx(m);
+    for (i = 0; i < max; ++i) {
+        char *path = paths[all_idx[i]];
+        printf("Load from %s\n", path);
         image orig = load_image_color(path, 0, 0);
         image sized = resize_image(orig, net.w, net.h);
         char *id = basecfg(path);
@@ -313,26 +354,30 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         labelpath = find_replace(labelpath, ".jpg", ".txt");
         labelpath = find_replace(labelpath, ".JPEG", ".txt");
 
-        int num_labels = 0;
-        box_label *truth = read_boxes(labelpath, &num_labels);
         for(k = 0; k < side*side*l.n; ++k){
-            if(probs[k][0] > thresh){
-                ++proposals;
-                avg_prob += probs[k][0];
+            for (j = 0; j < classes; ++j) {
+                if(probs[k][j] > thresh){
+                    ++proposals;
+                    avg_prob += probs[k][j];
+                }
             }
         }
+
+        int num_labels = 0;
+        box_label *truth = read_boxes(labelpath, &num_labels);
+        total += num_labels; 
         for (j = 0; j < num_labels; ++j) {
-            ++total;
             box t = {truth[j].x, truth[j].y, truth[j].w, truth[j].h};
             float best_iou = 0;
             for(k = 0; k < side*side*l.n; ++k){
                 float iou = box_iou(boxes[k], t);
-                if(probs[k][0] > thresh && iou > best_iou){
+                if(probs[k][truth[j].id] > thresh && iou > best_iou){
                     best_iou = iou;
                 }
             }
             avg_iou += best_iou;
-            if(best_iou > iou_thresh){
+
+            if (best_iou > iou_thresh) {
                 ++correct;
             }
         }
@@ -410,7 +455,10 @@ void run_yolo(int argc, char **argv)
 
     float thresh = find_float_arg(argc, argv, "-thresh", .001);
     float iou_thresh = find_float_arg(argc, argv, "-iou_thresh", 0.5);
+    float nms = find_float_arg(argc, argv, "-nms", 0.3);
     int only_obj = find_int_arg(argc, argv, "-only_obj", 0);
+    int max_num = find_int_arg(argc, argv, "-max_num", 100);
+    int data_type = find_int_arg(argc, argv, "-data_type", 3);
     int cam_index = find_int_arg(argc, argv, "-c", 0);
     int frame_skip = find_int_arg(argc, argv, "-s", 0);
     if(argc < 4){
@@ -424,6 +472,6 @@ void run_yolo(int argc, char **argv)
     if(0==strcmp(argv[2], "test")) test_yolo(cfg, weights, filename, thresh);
     else if(0==strcmp(argv[2], "train")) train_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "valid")) validate_yolo(cfg, weights);
-    else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh, only_obj);
+    else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh, only_obj, data_type, nms, max_num);
     else if(0==strcmp(argv[2], "demo")) demo(cfg, weights, thresh, cam_index, filename, voc_names, voc_labels, CLASSNUM, frame_skip);
 }

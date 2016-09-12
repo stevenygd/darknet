@@ -276,16 +276,21 @@ void do_nms_sort(box *boxes, float **probs, int total, int classes, float thresh
     free(s);
 }
 
+// Do none-maximum-suppresion
 void do_nms(box *boxes, float **probs, int total, int classes, float thresh)
 {
     int i, j, k;
-    for(i = 0; i < total; ++i){
+    for(i = 0; i < total; ++i){ // iterate through num of grids
         int any = 0;
         for(k = 0; k < classes; ++k) any = any || (probs[i][k] > 0);
-        if(!any) {
+        if(!any) { // doesn't contain objects.
             continue;
         }
         for(j = i+1; j < total; ++j){
+            // if the jth box has large overlap with the ith box
+            // then try to supress either jth or the ith box probability
+            // of the same class so that for each class, only one box
+            // will have significantly large probability
             if (box_iou(boxes[i], boxes[j]) > thresh){
                 for(k = 0; k < classes; ++k){
                     if (probs[i][k] < probs[j][k]) probs[i][k] = 0;
