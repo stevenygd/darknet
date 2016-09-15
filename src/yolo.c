@@ -276,17 +276,9 @@ int* shuffled_idx(int total) {
     return all_idx;
 }
 
-void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh, int only_obj, int type, float nms, int max)
+void validate_with_param(network net, float thresh, float iou_thresh, int only_obj, int type, float nms, int max, int draw)
 {
-    network net = parse_network_cfg(cfgfile);
-    if(weightfile){
-        load_weights(&net, weightfile);
-    }
-    set_batch_network(&net, 1);
-    fprintf(stderr, "Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
     srand(time(0));
-
-    char *base = "results/comp4_det_test_";
     list *plist = get_paths(get_data_path(type, "/data/full_10_class_yolo/"));
     char **paths = (char **)list_to_array(plist);
 
@@ -296,12 +288,6 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
     int side = l.side;
 
     int j, k;
-    FILE **fps = calloc(classes, sizeof(FILE *));
-    for(j = 0; j < classes; ++j){
-        char buff[1024];
-        snprintf(buff, 1024, "%s%s.txt", base, voc_names[j]);
-        fps[j] = fopen(buff, "w");
-    }
     box *boxes = calloc(side*side*l.n, sizeof(box));
 
     // probs[loc][c] is the probablity of class [c] at location [loc]
@@ -310,46 +296,32 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
 
     int m = plist->size;
     int i=0;
-
-    // specify the probability threshold to be considered as an detection 
-    // float thresh = .001;
-    
-    // Specify the iou_thresh hold to be considered correctly localized
-    // float iou_thresh = .5;
-    
-    // Specify the threshhold to perform non-maximum supression
-    // float nms = 0.3;
-
     int total = 0;
     int correct = 0;
     int proposals = 0;
     float avg_iou = 0;
     float avg_prob= 0;
 
-    // this is the non shuffled way
-    // for(i = 0; i < m; ++i){
-        // char *path = paths[i];
-
     int* all_idx = shuffled_idx(m);
     for (i = 0; i < max; ++i) {
         char *path = paths[all_idx[i]];
-        printf("Load from %s\n", path);
+        fprintf(stderr, "Load from %s\n", path);
         image orig = load_image_color(path, 0, 0);
         image sized = resize_image(orig, net.w, net.h);
         char *id = basecfg(path);
         float *predictions = network_predict(net, sized.data);
-        // convert_detections(predictions, classes, l.n, square, side, 1, 1, thresh, probs, boxes, 1);
-        // last param is : only_objectness, detect or not, doesn't distinguish between classes
         convert_detections(predictions, classes, l.n, square, side, 1, 1, thresh, probs, boxes, only_obj);
         if (nms) do_nms(boxes, probs, side*side*l.n, 1, nms);
 
-        // image im = load_image_color(input,0,0);
-        // if (nms) do_nms_sort(boxes, probs, l.side*l.side*l.n, l.classes, nms);
-        //draw_detections(im, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20);
-        draw_detections(orig, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, CLASSNUM);
-        char* outpath = find_replace(path, "images", "predicts");
-        printf("Svae to %s\n", outpath);
-        save_image(orig, outpath);
+        if (draw){
+            // image im = load_image_color(input,0,0);
+            // if (nms) do_nms_sort(boxes, probs, l.side*l.side*l.n, l.classes, nms);
+            //draw_detections(im, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20);
+            draw_detections(orig, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, CLASSNUM);
+            char* outpath = find_replace(path, "images", "predicts");
+            printf("Svae to %s\n", outpath);
+            save_image(orig, outpath);
+        }
 
         char *labelpath = find_replace(path, "images", "labels");
         labelpath = find_replace(labelpath, "JPEGImages", "labels");
@@ -391,8 +363,51 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
         free_image(sized);
     }
 	
+    printf("%5d %5d\tRPs/Img: %.2f\tIOU: %.2f%%\tProb:%.5f\tRecall:%.2f%%\tPrecision:%.2f%%\n", correct, total, (float)proposals/(m+1), avg_iou*100/total, avg_prob/proposals, 100.*correct/total, 100.*correct/proposals);
     fprintf(stderr, "%5d %5d\tRPs/Img: %.2f\tIOU: %.2f%%\tProb:%.5f\tRecall:%.2f%%\tPrecision:%.2f%%\n", correct, total, (float)proposals/(m+1), avg_iou*100/total, avg_prob/proposals, 100.*correct/total, 100.*correct/proposals);
 }
+
+
+void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float iou_thresh, int only_obj, int type, float nms, int max)
+{
+    network net = parse_network_cfg(cfgfile);
+    if(weightfile){
+        load_weights(&net, weightfile);
+    }
+    set_batch_network(&net, 1);
+    fprintf(stderr, "Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
+    srand(time(0));
+
+    validate_with_param(net, thresh, iou_thresh, only_obj, type, nms, max, 1);
+}
+
+void grid_search(char *cfgfile, char *weightfile, float max_thresh, float max_iou_thresh, int only_obj, int type, float max_nms, int max)
+{
+    network net = parse_network_cfg(cfgfile);
+    if(weightfile){
+        load_weights(&net, weightfile);
+    }
+    set_batch_network(&net, 1);
+    fprintf(stderr, "Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
+    srand(time(0));
+
+    float thr_step = 0.01;
+    float thr;
+    float nms_step = 0.1;
+    float nms;
+    float iou_step = 0.1;
+    float iou;
+    for (iou = 0.0; iou < max_iou_thresh; iou = iou + iou_step) {
+        for (thr = 0.0; thr < max_thresh; thr = thr + thr_step) {
+            for (nms = 0.0; nms < max_nms; nms = nms + nms_step) {
+                fprintf(stderr, "Parameters: iou = %f;\tthr=%f;\tnms = %f;\t\n", iou, thr, nms);
+                printf("Parameters: iou = %f;\tthr=%f;\tnms = %f;\t\n", iou, thr, nms);
+                validate_with_param(net, thr, iou, only_obj, type, nms, max, 0);
+            }
+        }
+    }
+}
+
 
 void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
 {
@@ -475,5 +490,6 @@ void run_yolo(int argc, char **argv)
     else if(0==strcmp(argv[2], "train")) train_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "valid")) validate_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh, only_obj, data_type, nms, max_num);
+    else if(0==strcmp(argv[2], "grid")) grid_search(cfg, weights, thresh, iou_thresh, only_obj, data_type, nms, max_num);
     else if(0==strcmp(argv[2], "demo")) demo(cfg, weights, thresh, cam_index, filename, voc_names, voc_labels, CLASSNUM, frame_skip);
 }
