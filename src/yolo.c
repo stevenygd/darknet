@@ -12,6 +12,7 @@
 
 /* Change class name */
 #define CLASSNUM 10
+#define EPOCH_SIZE 54
 char *voc_names[] = {"2456", "2877", "3001", "3002", "3003", "3004", "3005", "3010", "30363", "3037"};
 image voc_labels[CLASSNUM];
 
@@ -82,7 +83,8 @@ void train_yolo(char *cfgfile, char *weightfile)
 
         printf("%d: %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
         fprintf(stderr, "%d: %f, %f avg, %f long avg, %f rate, %lf seconds, %d images\n", i, loss, avg_loss, long_avg_loss, get_current_rate(net), sec(clock()-time), i*imgs);
-        if(i%1080==0 || (i < 1080 && i%108 == 0)){
+        // if(i%1080==0 || (i < 1080 && i%108 == 0)){
+        if(i % 10 * EPOCH_SIZE == 0 || (i < 10 * EPOCH_SIZE&& i % EPOCH_SIZE == 0)){
             char buff[256];
             sprintf(buff, "%s/%s_%d_%f.weights", backup_directory, base, i, get_current_rate(net));
             save_weights(net, buff);
