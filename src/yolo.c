@@ -381,7 +381,7 @@ void validate_yolo_recall(char *cfgfile, char *weightfile, float thresh, float i
     validate_with_param(net, thresh, iou_thresh, only_obj, type, nms, max, 1);
 }
 
-void grid_search(char *cfgfile, char *weightfile, float max_thresh, float max_iou_thresh, int only_obj, int type, float max_nms, int max)
+void grid_search(char *cfgfile, char *weightfile, float thr_min, float thr_max, float thr_step, float iou_min, float iou_max, float iou_step, float nms_min, float nms_max, float  nms_step, int only_obj, int type, int max) 
 {
     network net = parse_network_cfg(cfgfile);
     if(weightfile){
@@ -389,17 +389,17 @@ void grid_search(char *cfgfile, char *weightfile, float max_thresh, float max_io
     }
     set_batch_network(&net, 1);
     fprintf(stderr, "Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
+    printf("Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
+    fprintf(stderr, "Range: thr = (%f, %f, %f);\tiou = (%f, %f, %f);\tnms = (%f, %f, %f)\n", thr_min, thr_max, thr_step, iou_min, iou_max, iou_step, nms_min, nms_max, nms_step); 
+    printf("Range: thr = (%f, %f, %f);\tiou = (%f, %f, %f);\tnms = (%f, %f, %f)\n", thr_min, thr_max, thr_step, iou_min, iou_max, iou_step, nms_min, nms_max, nms_step); 
     srand(time(0));
 
-    float thr_step = 0.01;
     float thr;
-    float nms_step = 0.1;
     float nms;
-    float iou_step = 0.1;
     float iou;
-    for (iou = 0.0; iou < max_iou_thresh; iou = iou + iou_step) {
-        for (thr = 0.0; thr < max_thresh; thr = thr + thr_step) {
-            for (nms = 0.0; nms < max_nms; nms = nms + nms_step) {
+    for (iou = iou_min; iou < iou_max; iou = iou + iou_step) {
+        for (thr = thr_min; thr < thr_max; thr = thr + thr_step) {
+            for (nms = nms_min; nms < nms_max; nms = nms + nms_step) {
                 fprintf(stderr, "Parameters: iou = %f;\tthr=%f;\tnms = %f;\t\n", iou, thr, nms);
                 printf("Parameters: iou = %f;\tthr=%f;\tnms = %f;\t\n", iou, thr, nms);
                 validate_with_param(net, thr, iou, only_obj, type, nms, max, 0);
@@ -470,6 +470,17 @@ void run_yolo(int argc, char **argv)
         voc_labels[i] = load_image_color(buff, 0, 0);
     }
 
+    float thr_min  = find_float_arg(argc, argv, "-thr_min", 0.0);
+    float thr_max  = find_float_arg(argc, argv, "-thr_max", 0.2);
+    float nms_min  = find_float_arg(argc, argv, "-nms_min", 0.0);
+    float nms_max  = find_float_arg(argc, argv, "-nms_max", 1.0);
+    float iou_min  = find_float_arg(argc, argv, "-iou_min", 0.0);
+    float iou_max  = find_float_arg(argc, argv, "-iou_max", 0.5);
+
+    float thr_step = find_float_arg(argc, argv, "-thr_step", 0.01);
+    float nms_step = find_float_arg(argc, argv, "-nms_step", 0.1);
+    float iou_step = find_float_arg(argc, argv, "-iou_step", 0.1);
+
     float thresh = find_float_arg(argc, argv, "-thresh", .001);
     float iou_thresh = find_float_arg(argc, argv, "-iou_thresh", 0.5);
     float nms = find_float_arg(argc, argv, "-nms", 0.3);
@@ -490,6 +501,7 @@ void run_yolo(int argc, char **argv)
     else if(0==strcmp(argv[2], "train")) train_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "valid")) validate_yolo(cfg, weights);
     else if(0==strcmp(argv[2], "recall")) validate_yolo_recall(cfg, weights, thresh, iou_thresh, only_obj, data_type, nms, max_num);
-    else if(0==strcmp(argv[2], "grid")) grid_search(cfg, weights, thresh, iou_thresh, only_obj, data_type, nms, max_num);
+    else if(0==strcmp(argv[2], "grid")) grid_search(cfg, weights, thr_min, thr_max, thr_step, iou_min, iou_max, iou_step, nms_min, nms_max, nms_step, only_obj, data_type, max_num);
     else if(0==strcmp(argv[2], "demo")) demo(cfg, weights, thresh, cam_index, filename, voc_names, voc_labels, CLASSNUM, frame_skip);
 }
+
